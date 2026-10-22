@@ -1,4 +1,4 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash, timingSafeEqual, randomInt } from 'node:crypto';
 import { MatchController, sanitizeSettings } from '../../shared/game/MatchController.js';
 import { BotManager, BOT_DIFFICULTY } from '../../shared/ai/BotController.js';
 import { getBuiltinArena, BUILTIN_ARENAS } from '../../shared/maps/arenas.js';
@@ -256,10 +256,26 @@ export class Room {
     const m = this.match;
     const deny = (text) => this.send(me, { t: 'err', code: 'admin', msg: text });
     if (this.tournament
-        && ['start', 'stop', 'restart', 'move', 'balance', 'lock', 'settings', 'arena', 'addbot', 'rmbot'].includes(a)) {
+        && ['start', 'stop', 'restart', 'move', 'balance', 'draw_3v3', 'lock', 'settings', 'arena', 'addbot', 'rmbot'].includes(a)) {
       return deny('Use os controles do campeonato; cancele-o para alterar as regras ou os times.');
     }
     switch (a) {
+      case 'draw_3v3': {
+        if (!['lobby', 'ended'].includes(m.phase)) return deny('Pare a partida antes de sortear os times.');
+        const players = this.humans().filter(p => !p.away);
+        if (players.length < 6) return deny('São necessários pelo menos 6 jogadores conectados para sortear o 3v3.');
+        for (let i = players.length - 1; i > 0; i--) {
+          const j = randomInt(i + 1);
+          [players[i], players[j]] = [players[j], players[i]];
+        }
+        m.stop();
+        for (const p of m.players.values()) m.setTeam(p.id, 'spec');
+        m.setSettings({ teamSize: 3 });
+        players.slice(0, 6).forEach((p, i) => m.setTeam(p.id, i < 3 ? 'red' : 'blue'));
+        for (const p of this.members.values()) { if (p.queue) p.queue.length = 0; p.lastInput = 0; }
+        this.system(`Times 3v3 sorteados! Vermelho: ${players.slice(0, 3).map(p => p.name).join(', ')}. Azul: ${players.slice(3, 6).map(p => p.name).join(', ')}. Os demais assistem.`);
+        break;
+      }
       case 'tournament_draw': {
         if (this.tournament?.status === 'running') return deny('Cancele o campeonato atual antes de sortear novamente.');
         if (!['lobby', 'ended'].includes(m.phase)) return deny('Pare a partida antes de sortear as duplas.');

@@ -95,6 +95,8 @@ Depois de abrir o jogo uma vez por `http(s)`, um *service worker* guarda os arqu
 
 ### Campeonato de duplas
 
+Para uma partida avulsa, o anfitrião pode clicar em **Sortear times 3v3** no lobby. O sorteio considera os jogadores conectados, inclusive espectadores, escolhe seis sem repetição e monta dois times de três. Se houver mais pessoas, as demais assistem. Depois, clique em **Iniciar**. É preciso parar a partida e voltar ao modo normal se houver um campeonato criado.
+
 No lobby, abra **Campeonato de duplas**. O anfitrião pode usar **Permitir até 16 participantes** para aumentar a capacidade da sala. Reúna de 4 a 16 jogadores em quantidade par, incluindo os espectadores, remova os bots e pare qualquer partida normal.
 
 Clique em **Sortear duplas** para formar pares aleatórios e a chave de mata-mata. **Iniciar próxima partida** coloca somente as duas duplas do confronto em campo, em 2v2; os demais assistem. Depois de cada resultado, volte ao lobby com Esc e inicie a próxima partida. Os vencedores avançam até a final e a dupla campeã aparece na chave.
@@ -217,7 +219,7 @@ Formato próprio `discofut-arena` v1:
 npm test
 ```
 
-85 testes: colisões frontal/oblíqua, conservação de momento, rebote, tunelamento a velocidade máxima, traves, canto, estabilidade 10 s com 4 jogadores prensando a bola, determinismo, gol limítrofe (rente à trave por dentro/fora, bola parada sobre a linha), gol único, kickoff, chutes/cooldown, diagonais, fim por gols/tempo/gol de ouro, autoria/assistência/gol contra, bots (partidas completas, papéis, difícil > fácil), validação de arenas maliciosas e um servidor real com clientes WebSocket (salas, senha, permissões, chat, sincronização, gol decidido pelo servidor, bots, expulsão, reconexão, transferência de anfitrião, *path traversal*).
+90 testes: colisões frontal/oblíqua, conservação de momento, rebote, tunelamento a velocidade máxima, traves, canto, estabilidade 10 s com 4 jogadores prensando a bola, determinismo, gol limítrofe (rente à trave por dentro/fora, bola parada sobre a linha), gol único, kickoff, chutes/cooldown, diagonais, fim por gols/tempo/gol de ouro, autoria/assistência/gol contra, bots (partidas completas, papéis, difícil > fácil), validação de arenas maliciosas e um servidor real com clientes WebSocket (salas, senha, permissões, chat, sincronização, gol decidido pelo servidor, bots, expulsão, reconexão, transferência de anfitrião, *path traversal*).
 
 Teste ponta a ponta opcional com navegadores reais:
 

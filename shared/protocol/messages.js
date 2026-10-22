@@ -29,6 +29,7 @@ export const ADMIN_ACTIONS = Object.freeze([
   'move', 'kick', 'ban', 'mute', 'unmute', 'admin', 'start', 'stop', 'restart',
   'pause', 'resume', 'balance', 'settings', 'arena', 'addbot', 'rmbot', 'clearbans', 'lock',
   'tournament_draw', 'tournament_next', 'tournament_cancel',
+  'draw_3v3',
 ]);
 
 /** Remove controles/marcação e limita tamanho. */

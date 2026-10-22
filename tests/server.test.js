@@ -73,6 +73,13 @@ test('campeonato por WebSocket: 16 pessoas no mesmo IP, sorteio compartilhado e 
   host.send({ t: 'admin', a: 'tournament_cancel' });
   const cancelled = await clients[15].wait(m => m.t === 'room' && m.rv > result.rv && !m.room.tournament);
   assert.equal(cancelled.room.settings.teamsLocked, false);
+  host.send({ t: 'admin', a: 'draw_3v3' });
+  const shuffled = await Promise.all(clients.map(client => client.wait(m => m.t === 'room' && m.rv > cancelled.rv && m.room.settings.teamSize === 3)));
+  const teams = state => state.members.map(p => [p.id, p.team]);
+  for (const message of shuffled) assert.deepEqual(teams(message.room), teams(shuffled[0].room));
+  assert.equal(shuffled[0].room.members.filter(p => p.team === 'red').length, 3);
+  assert.equal(shuffled[0].room.members.filter(p => p.team === 'blue').length, 3);
+  assert.equal(shuffled[0].room.members.filter(p => p.team === 'spec').length, 10);
 });
 
 test('servidor: salas reais, sincronização, autoridade e administração', async (t) => {
