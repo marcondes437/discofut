@@ -49,14 +49,14 @@ export class RoomLobby {
     this.btnRestart = h('button', { class: 'btn', type: 'button', onclick: () => this.admin('restart') }, '↺ Reiniciar');
     this.btnPause = h('button', { class: 'btn', type: 'button', onclick: () => this.admin(this.game.room?.paused ? 'resume' : 'pause') }, 'Pausar');
     this.btnBalance = h('button', { class: 'btn', type: 'button', onclick: () => this.admin('balance') }, 'Auto-balancear');
-    this.btnDraw3v3 = h('button', { class: 'btn', type: 'button', onclick: () => this.admin('draw_3v3') }, 'Sortear times 3v3');
+    this.btnDrawTeams = h('button', { class: 'btn', type: 'button', onclick: () => this.admin('draw_teams') }, 'Sortear times');
     this.btnLock = h('button', { class: 'btn', type: 'button', onclick: () => this.admin('lock', { value: !this.game.room?.settings.teamsLocked }) }, 'Bloquear times');
     const botTeam = select([['red', 'Vermelho'], ['blue', 'Azul']], 'blue', { class: 'input', 'aria-label': 'Time do bot' });
     const botDiff = select([['easy', 'Fácil'], ['medium', 'Médio'], ['hard', 'Difícil']], 'medium', { class: 'input', 'aria-label': 'Dificuldade do bot' });
     const btnBot = h('button', { class: 'btn', type: 'button', onclick: () => this.admin('addbot', { team: botTeam.value, difficulty: botDiff.value }) }, '+ Bot');
     this.btnBot = btnBot;
     this.adminBar = h('div', {},
-      h('div', { class: 'btn-row' }, this.btnStart, this.btnStop, this.btnRestart, this.btnPause, this.btnBalance, this.btnDraw3v3, this.btnLock),
+      h('div', { class: 'btn-row' }, this.btnStart, this.btnStop, this.btnRestart, this.btnPause, this.btnBalance, this.btnLock, this.btnDrawTeams),
       h('div', { class: 'btn-row', style: { alignItems: 'center' } }, botTeam, botDiff, btnBot, h('span', { class: 'note' }, 'Bots aparecem marcados como BOT.')));
     this.nonAdminNote = h('p', { class: 'note' }, 'Só o anfitrião/administradores iniciam a partida e alteram regras. Use "Entrar" para escolher um time.');
     this.resultsBox = h('div', {});
@@ -190,12 +190,12 @@ export class RoomLobby {
     this.btnLock.textContent = room.settings.teamsLocked ? 'Desbloquear times' : 'Bloquear times';
     for (const button of [this.btnStart, this.btnStop, this.btnRestart, this.btnBalance, this.btnLock]) button.disabled = !!room.tournament;
     this.btnBot.disabled = !!room.tournament;
-    const ready3v3 = room.members.filter(p => !p.bot && !p.away).length >= 6;
-    this.btnDraw3v3.disabled = !!room.tournament || !ready3v3 || !['lobby', 'ended'].includes(room.phase);
-    this.btnDraw3v3.title = room.tournament ? 'Volte ao modo normal para sortear 3v3.'
-      : !ready3v3 ? 'Reúna pelo menos 6 jogadores conectados.'
+    const readyToDraw = room.members.filter(p => !p.away).length >= 2;
+    this.btnDrawTeams.disabled = !!room.tournament || !readyToDraw || !['lobby', 'ended'].includes(room.phase);
+    this.btnDrawTeams.title = room.tournament ? 'Volte ao modo normal para sortear os times.'
+      : !readyToDraw ? 'Reúna pelo menos 2 participantes.'
         : !['lobby', 'ended'].includes(room.phase) ? 'Pare a partida antes do sorteio.'
-          : 'Sorteia seis jogadores, incluindo espectadores. Os demais assistem. Depois, clique em Iniciar.';
+          : `Sorteia times no modo ${teamSize}v${teamSize}, incluindo espectadores e bots. Times incompletos são divididos de forma equilibrada; quem sobrar assiste.`;
 
     this.settingsFs.disabled = !isAdmin || !!room.tournament;
     this._updateTournament(room, isAdmin);

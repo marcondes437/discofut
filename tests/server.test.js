@@ -45,7 +45,7 @@ test('campeonato por WebSocket: 16 pessoas no mesmo IP, sorteio compartilhado e 
   t.after(async () => { for (const client of clients) client.close(); await srv.close(); });
   for (let i = 0; i < 16; i++) clients.push(await new TestClient(srv.port, `Duplas ${i}`).open());
   const host = clients[0];
-  host.send({ t: 'create', name: 'Campeonato', maxPlayers: 16, settings: { timeLimit: 1, scoreLimit: 1 } });
+  host.send({ t: 'create', name: 'Campeonato', maxPlayers: 16, settings: { teamSize: 3, timeLimit: 1, scoreLimit: 1 } });
   const joined = await host.wait(m => m.t === 'joined');
   for (const client of clients.slice(1)) {
     client.send({ t: 'join', code: joined.room.code });
@@ -73,7 +73,7 @@ test('campeonato por WebSocket: 16 pessoas no mesmo IP, sorteio compartilhado e 
   host.send({ t: 'admin', a: 'tournament_cancel' });
   const cancelled = await clients[15].wait(m => m.t === 'room' && m.rv > result.rv && !m.room.tournament);
   assert.equal(cancelled.room.settings.teamsLocked, false);
-  host.send({ t: 'admin', a: 'draw_3v3' });
+  host.send({ t: 'admin', a: 'draw_teams' });
   const shuffled = await Promise.all(clients.map(client => client.wait(m => m.t === 'room' && m.rv > cancelled.rv && m.room.settings.teamSize === 3)));
   const teams = state => state.members.map(p => [p.id, p.team]);
   for (const message of shuffled) assert.deepEqual(teams(message.room), teams(shuffled[0].room));

@@ -95,7 +95,7 @@ Depois de abrir o jogo uma vez por `http(s)`, um *service worker* guarda os arqu
 
 ### Campeonato de duplas
 
-Para uma partida avulsa, o anfitrião pode clicar em **Sortear times 3v3** no lobby. O sorteio considera os jogadores conectados, inclusive espectadores, escolhe seis sem repetição e monta dois times de três. Se houver mais pessoas, as demais assistem. Depois, clique em **Iniciar**. É preciso parar a partida e voltar ao modo normal se houver um campeonato criado.
+Para uma partida avulsa, o anfitrião pode clicar em **Sortear times**, ao lado de **Bloquear times** no lobby. Funciona em 1v1, 2v2, 3v3 e 4v4, preservando o modo escolhido. O sorteio inclui participantes conectados, espectadores e bots, divide-os de forma equilibrada e deixa os excedentes assistindo. Bastam duas pessoas: mesmo no modo 3v3, elas serão divididas uma para cada lado. Depois, clique em **Iniciar**. É preciso parar a partida e voltar ao modo normal se houver um campeonato criado.
 
 No lobby, abra **Campeonato de duplas**. O anfitrião pode usar **Permitir até 16 participantes** para aumentar a capacidade da sala. Reúna de 4 a 16 jogadores em quantidade par, incluindo os espectadores, remova os bots e pare qualquer partida normal.
 
@@ -219,7 +219,7 @@ Formato próprio `discofut-arena` v1:
 npm test
 ```
 
-90 testes: colisões frontal/oblíqua, conservação de momento, rebote, tunelamento a velocidade máxima, traves, canto, estabilidade 10 s com 4 jogadores prensando a bola, determinismo, gol limítrofe (rente à trave por dentro/fora, bola parada sobre a linha), gol único, kickoff, chutes/cooldown, diagonais, fim por gols/tempo/gol de ouro, autoria/assistência/gol contra, bots (partidas completas, papéis, difícil > fácil), validação de arenas maliciosas e um servidor real com clientes WebSocket (salas, senha, permissões, chat, sincronização, gol decidido pelo servidor, bots, expulsão, reconexão, transferência de anfitrião, *path traversal*).
+107 testes: colisões frontal/oblíqua, conservação de momento, rebote, tunelamento a velocidade máxima, traves, canto, estabilidade 10 s com 4 jogadores prensando a bola, determinismo, gol limítrofe (rente à trave por dentro/fora, bola parada sobre a linha), gol único, kickoff, chutes/cooldown, diagonais, fim por gols/tempo/gol de ouro, autoria/assistência/gol contra, bots (partidas completas, papéis, difícil > fácil), validação de arenas maliciosas e um servidor real com clientes WebSocket (salas, senha, permissões, chat, sincronização, gol decidido pelo servidor, bots, expulsão, reconexão, transferência de anfitrião, *path traversal*).
 
 Teste ponta a ponta opcional com navegadores reais:
 
