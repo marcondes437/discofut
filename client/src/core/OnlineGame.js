@@ -6,6 +6,7 @@ import { ReplayBuffer } from '../replay/ReplayBuffer.js';
 
 const MS_PER_TICK = 1000 / TICK_RATE;
 const HISTORY = 240;
+const MAX_REMOTE_PREDICTION_TICKS = 18;
 
 /**
  * Sessão online: envia apenas entradas (com número de sequência), recebe
@@ -87,6 +88,9 @@ export class OnlineGame {
     this.smoothX = 0; this.smoothY = 0;
     this.ballSmoothX = 0; this.ballSmoothY = 0;
     this.predPhase = null;
+    this.remoteSmooth = new Map();
+    this.remoteVisuals = new Map();
+    this.remotePredictionTicks = 0;
     this.predKick = { prevKick: false, kickArmed: false, kickBuffer: 0, kickCooldown: 0 };
     this.predictedKickSounds = [];
     if (this.myTeam === 'spec') return;
@@ -145,6 +149,14 @@ export class OnlineGame {
     const oldX = pb.x, oldY = pb.y;
     const oldBallX = this.predBall.x + this.ballSmoothX;
     const oldBallY = this.predBall.y + this.ballSmoothY;
+    const oldRemotes = new Map();
+    for (const body of this.predWorld.bodies) {
+      if (body.kind !== 'player' || body === pb) continue;
+      const offset = this.remoteSmooth.get(body.id);
+      oldRemotes.set(body.id, this.remoteVisuals.get(body.id) || {
+        x: body.x + (offset?.x || 0), y: body.y + (offset?.y || 0),
+      });
+    }
     pb.x = mine[1]; pb.y = mine[2]; pb.vx = mine[3]; pb.vy = mine[4];
     const ball = this.predBall;
     [ball.x, ball.y, ball.vx, ball.vy] = d.b;
@@ -152,6 +164,7 @@ export class OnlineGame {
     this.predKick = { kickCooldown: mine[6] || 0, kickArmed: !!mine[7], prevKick: !!mine[8], kickBuffer: mine[10] || 0 };
     // Rebuild all discs from the authoritative state before replaying inputs.
     this.predWorld.bodies.length = 0;
+    this.remotePredictionTicks = 0;
     this.predWorld.addBody(ball);
     for (const p of d.p) {
       if (p[0] === this.myId) { this.predWorld.addBody(pb); continue; }
@@ -169,6 +182,17 @@ export class OnlineGame {
     }
     const ballEx = oldBallX - ball.x, ballEy = oldBallY - ball.y;
     const continuous = this.predValid && this.predPhase === d.ph && !d.pa;
+    this.remoteSmooth.clear();
+    for (const body of this.predWorld.bodies) {
+      if (body.kind !== 'player' || body === pb) continue;
+      const old = oldRemotes.get(body.id);
+      if (continuous && old) {
+        const x = old.x - body.x, y = old.y - body.y;
+        if (x * x + y * y < 60 * 60) this.remoteSmooth.set(body.id, { x, y });
+      }
+      body.px = body.x; body.py = body.y;
+    }
+    this.remoteVisuals.clear();
     // Preserve visual continuity across ordinary corrections, never across resets/goals.
     if (continuous && ballEx * ballEx + ballEy * ballEy < 60 * 60) {
       this.ballSmoothX = ballEx; this.ballSmoothY = ballEy;
@@ -188,6 +212,11 @@ export class OnlineGame {
     if (this.latest?.pa || (phase !== 'playing' && phase !== 'kickoff')) return;
     for (const body of this.predWorld.bodies) {
       if (body.kind !== 'player') continue;
+      // Do not keep inventing an opponent's movement during a network outage.
+      if (body !== b && this.remotePredictionTicks >= MAX_REMOTE_PREDICTION_TICKS) {
+        body.vx = 0; body.vy = 0;
+        continue;
+      }
       const fired = this._predictInput(body, body === b ? bits : body.input, body === b ? this.predKick : body.kickState);
       if (fired && body === b && !replaying) {
         this.app.audio.playEvents([{ type: 'kick', id: this.myId }]);
@@ -204,6 +233,7 @@ export class OnlineGame {
       if (bodyTeam) kickoffConstraint(body, bodyTeam, kickoffTeam, kr);
     } : null;
     this.predWorld.step();
+    this.remotePredictionTicks++;
   }
 
   _predictInput(b, bits, k) {
@@ -281,7 +311,7 @@ export class OnlineGame {
     return (TICK_RATE / rate) + Math.min(2, jitterTicks * 0.5);
   }
 
-  _view(now) {
+  _view(now, alpha = 1) {
     if (!this.snaps.length) return null;
     const est = now / MS_PER_TICK + (this.tickOffset || 0);
     const rt = est - this.interpDelayTicks();
@@ -313,7 +343,10 @@ export class OnlineGame {
       else if (predicted?.has(p[0])) {
         // Draw contacts on the same timeline as the predicted ball.
         const body = predicted.get(p[0]);
-        x = body.x; y = body.y;
+        const offset = this.remoteSmooth.get(p[0]);
+        const fraction = Math.max(0, Math.min(1, alpha));
+        x = body.px + (body.x - body.px) * fraction + (offset?.x || 0);
+        y = body.py + (body.y - body.py) * fraction + (offset?.y || 0);
       }
       players.push({ id: p[0], x, y, vx: p[3], vy: p[4], team: m.team, label: this.labels.get(p[0]) || '', name: m.name, kicking, local, bot: m.bot });
     }
@@ -329,8 +362,18 @@ export class OnlineGame {
     this.smoothX *= decay; this.smoothY *= decay;
     const ballDecay = Math.exp(-dt * 25);
     this.ballSmoothX *= ballDecay; this.ballSmoothY *= ballDecay;
-    let view = this.replayView || this._view(performance.now());
+    const remoteDecay = Math.exp(-dt * 24);
+    for (const offset of this.remoteSmooth.values()) {
+      offset.x *= remoteDecay; offset.y *= remoteDecay;
+    }
+    let view = this.replayView || this._view(performance.now(), alpha);
     if (!view) view = { ball: { x: 0, y: 0 }, players: [] };
+    if (!this.replayView) {
+      this.remoteVisuals.clear();
+      for (const player of view.players) {
+        if (!player.local) this.remoteVisuals.set(player.id, { x: player.x, y: player.y });
+      }
+    }
     if (this.predBody && this.predValid && this.app.settings.get('debug') && this.latest) {
       const mine = this.latest.p.find((p) => p[0] === this.myId);
       if (mine) view.ghost = { x: mine[1], y: mine[2] };

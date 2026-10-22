@@ -209,7 +209,7 @@ Formato próprio `discofut-arena` v1:
 npm test
 ```
 
-68 testes: colisões frontal/oblíqua, conservação de momento, rebote, tunelamento a velocidade máxima, traves, canto, estabilidade 10 s com 4 jogadores prensando a bola, determinismo, gol limítrofe (rente à trave por dentro/fora, bola parada sobre a linha), gol único, kickoff, chutes/cooldown, diagonais, fim por gols/tempo/gol de ouro, autoria/assistência/gol contra, bots (partidas completas, papéis, difícil > fácil), validação de arenas maliciosas e um servidor real com clientes WebSocket (salas, senha, permissões, chat, sincronização, gol decidido pelo servidor, bots, expulsão, reconexão, transferência de anfitrião, *path traversal*).
+72 testes: colisões frontal/oblíqua, conservação de momento, rebote, tunelamento a velocidade máxima, traves, canto, estabilidade 10 s com 4 jogadores prensando a bola, determinismo, gol limítrofe (rente à trave por dentro/fora, bola parada sobre a linha), gol único, kickoff, chutes/cooldown, diagonais, fim por gols/tempo/gol de ouro, autoria/assistência/gol contra, bots (partidas completas, papéis, difícil > fácil), validação de arenas maliciosas e um servidor real com clientes WebSocket (salas, senha, permissões, chat, sincronização, gol decidido pelo servidor, bots, expulsão, reconexão, transferência de anfitrião, *path traversal*).
 
 Teste ponta a ponta opcional com navegadores reais:
 

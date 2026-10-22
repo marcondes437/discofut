@@ -154,3 +154,58 @@ test('a buffered shot stays consistent between client prediction and server simu
   assert.ok(Math.abs(game.predBall.x - match.ball.x) < 0.001);
   assert.ok(Math.abs(game.predBall.vx - match.ball.vx) < 0.001);
 });
+
+function movingOpponent() {
+  const context = setup();
+  const { game, match, app } = context;
+  const remote = match.players.get(2);
+  Object.assign(remote.body, { x: 100, y: 100, vx: 1, vy: 0 });
+  remote.input = IN_RIGHT;
+  app.input.sample = () => 0;
+  app.camera.update = () => {};
+  app.renderer.draw = () => {};
+  app.hud = { update() {}, setNet() {} };
+  game._reconcile(match.snapshot());
+  return context;
+}
+
+test('opponent movement is interpolated between physics ticks on fast displays', () => {
+  const { game } = movingOpponent();
+  game.tick();
+  const x = alpha => game._view(performance.now(), alpha).players.find(p => p.id === 2).x;
+  assert.ok(x(0) < x(0.5));
+  assert.ok(x(0.5) < x(1));
+});
+
+test('small opponent corrections remain continuous and converge while rendering', () => {
+  const { game, match } = movingOpponent();
+  game.tick();
+  game.render(0.5, 1 / 144);
+  const before = game.remoteVisuals.get(2).x;
+  const d = match.snapshot();
+  d.p.find(p => p[0] === 2)[1] += 5;
+  game._onSnapshot({ d: { ...d, tick: d.tick + 1 }, a: game.seq });
+  assert.ok(Math.abs(game._view(performance.now()).players.find(p => p.id === 2).x - before) < 1e-8);
+  const initialError = Math.abs(game.remoteSmooth.get(2).x);
+  for (let i = 0; i < 20; i++) game.render(1, 1 / 144);
+  assert.ok(Math.abs(game.remoteSmooth.get(2).x) < initialError / 20);
+});
+
+test('large opponent teleports snap to the server instead of sliding across the field', () => {
+  const { game, match } = movingOpponent();
+  const d = match.snapshot();
+  d.p.find(p => p[0] === 2)[1] = 250;
+  game._onSnapshot({ d: { ...d, tick: d.tick + 1 }, a: 0 });
+  assert.equal(game.remoteSmooth.has(2), false);
+  assert.equal(game._view(performance.now()).players.find(p => p.id === 2).x, 250);
+});
+
+test('an opponent stops being extrapolated indefinitely during missing snapshots', () => {
+  const { game } = movingOpponent();
+  for (let i = 0; i < 30; i++) game.tick();
+  const body = game.predWorld.bodies.find(b => b.id === 2);
+  const x = body.x;
+  for (let i = 0; i < 60; i++) game.tick();
+  assert.equal(body.x, x);
+  assert.equal(body.vx, 0);
+});
