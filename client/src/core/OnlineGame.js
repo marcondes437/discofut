@@ -1,7 +1,7 @@
 import { physicsConfig, IN_KICK, TICK_RATE } from '@shared/config/physicsConfig.js';
 import { PhysicsWorld, createBody } from '@shared/physics/PhysicsWorld.js';
 import { buildArenaGeometry } from '@shared/maps/arenaGeometry.js';
-import { applyMovementInput, kickoffConstraint } from '@shared/game/MatchController.js';
+import { applyMovementInput, applyKickImpulse, kickoffConstraint } from '@shared/game/MatchController.js';
 import { ReplayBuffer } from '../replay/ReplayBuffer.js';
 
 const MS_PER_TICK = 1000 / TICK_RATE;
@@ -82,7 +82,12 @@ export class OnlineGame {
     if (!this.predWorld) return;
     this.predWorld.bodies.length = 0;
     this.predBody = null;
+    this.predBall = null;
+    this.predValid = false;
+    this.smoothX = 0; this.smoothY = 0;
+    this.predKick = { prevKick: false, kickArmed: false, kickCooldown: 0 };
     if (this.myTeam === 'spec') return;
+    this.predBall = this.predWorld.addBody(createBody('ball'));
     const b = createBody('player');
     b.id = this.myId;
     this.predWorld.addBody(b);
@@ -124,6 +129,19 @@ export class OnlineGame {
     if (!mine) return;
     const oldX = pb.x, oldY = pb.y;
     pb.x = mine[1]; pb.y = mine[2]; pb.vx = mine[3]; pb.vy = mine[4];
+    const ball = this.predBall;
+    [ball.x, ball.y, ball.vx, ball.vy] = d.b;
+    ball.px = ball.x; ball.py = ball.y;
+    this.predKick = { kickCooldown: mine[6] || 0, kickArmed: !!mine[7], prevKick: !!mine[8] };
+    // Rebuild all discs from the authoritative state before replaying inputs.
+    this.predWorld.bodies.length = 0;
+    this.predWorld.addBody(ball);
+    for (const p of d.p) {
+      if (p[0] === this.myId) { this.predWorld.addBody(pb); continue; }
+      const remote = createBody('player', p[1], p[2]);
+      remote.id = p[0]; remote.vx = p[3]; remote.vy = p[4];
+      this.predWorld.addBody(remote);
+    }
     // Reaplica as entradas ainda não confirmadas pelo servidor.
     if (this.ack >= 0) {
       for (let s = this.ack + 1; s <= this.seq; s++) {
@@ -143,10 +161,25 @@ export class OnlineGame {
 
   _predStep(bits, phase, kickoffTeam) {
     const b = this.predBody;
+    if (this.latest?.pa || (phase !== 'playing' && phase !== 'kickoff')) return;
     applyMovementInput(b, bits, physicsConfig);
+    const k = this.predKick;
+    const held = (bits & IN_KICK) !== 0;
+    if (held && !k.prevKick) k.kickArmed = true;
+    if (!held) k.kickArmed = false;
+    if (k.kickCooldown > 0) k.kickCooldown--;
+    if (held && k.kickCooldown === 0 && (this.room.settings.kickMode === 'repeat' || k.kickArmed)
+        && applyKickImpulse(b, this.predBall)) {
+      k.kickCooldown = this.room.settings.kickCooldown;
+      k.kickArmed = false;
+    }
+    k.prevKick = held;
     const team = this.myTeam;
     const kr = this.geo.kickoffRadius;
-    this.predWorld.playerConstraint = phase === 'kickoff' ? (body) => kickoffConstraint(body, team, kickoffTeam, kr) : null;
+    this.predWorld.playerConstraint = phase === 'kickoff' ? (body) => {
+      const bodyTeam = body === b ? team : this.room.members.find((m) => m.id === body.id)?.team;
+      if (bodyTeam) kickoffConstraint(body, bodyTeam, kickoffTeam, kr);
+    } : null;
     this.predWorld.step();
   }
 
@@ -249,7 +282,9 @@ export class OnlineGame {
       if (local && usePred) { x = this.predBody.x + this.smoothX; y = this.predBody.y + this.smoothY; }
       players.push({ id: p[0], x, y, vx: p[3], vy: p[4], team: m.team, label: this.labels.get(p[0]) || '', name: m.name, kicking, local, bot: m.bot });
     }
-    return { ball: { x: ballPos[0], y: ballPos[1] }, ballVel: { vx: A.b[2], vy: A.b[3] }, players, server: A };
+    const useBallPred = usePred && !this.latest.pa && ['playing', 'kickoff'].includes(this.latest.ph);
+    const ball = useBallPred ? this.predBall : { x: ballPos[0], y: ballPos[1], vx: A.b[2], vy: A.b[3] };
+    return { ball: { x: ball.x, y: ball.y }, ballVel: { vx: ball.vx, vy: ball.vy }, players, server: A };
   }
 
   render(alpha, dt) {

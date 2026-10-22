@@ -40,6 +40,23 @@ export function sanitizeSettings(s = {}, base = DEFAULT_SETTINGS) {
   return o;
 }
 
+/** Applies the same in-range kick impulse on the server and predicting client. */
+export function applyKickImpulse(b, ball, cfg = physicsConfig) {
+  const dx = ball.x - b.x;
+  const dy = ball.y - b.y;
+  const d = Math.hypot(dx, dy);
+  if (d - b.r - ball.r > cfg.kick.range) return false; // impede chute remoto
+  const nx = d > 1e-6 ? dx / d : 1;
+  const ny = d > 1e-6 ? dy / d : 0;
+  ball.vx += nx * cfg.kick.strength * ball.invMass;
+  ball.vy += ny * cfg.kick.strength * ball.invMass;
+  if (cfg.kick.kickback) {
+    b.vx -= nx * cfg.kick.kickback * b.invMass;
+    b.vy -= ny * cfg.kick.kickback * b.invMass;
+  }
+  return true;
+}
+
 /**
  * Aplica a aceleração de uma entrada ao corpo do jogador (8 direções,
  * diagonais normalizadas, resposta rápida ao inverter direção).
@@ -407,19 +424,8 @@ export class MatchController {
   _tryKick(p) {
     const b = p.body;
     const ball = this.ball;
-    const dx = ball.x - b.x;
-    const dy = ball.y - b.y;
-    const d = Math.hypot(dx, dy);
-    if (d - b.r - ball.r > this.cfg.kick.range) return false; // impede chute remoto
-    const nx = d > 1e-6 ? dx / d : 1;
-    const ny = d > 1e-6 ? dy / d : 0;
     const preVx = ball.vx, preVy = ball.vy;
-    ball.vx += nx * this.cfg.kick.strength * ball.invMass;
-    ball.vy += ny * this.cfg.kick.strength * ball.invMass;
-    if (this.cfg.kick.kickback) {
-      b.vx -= nx * this.cfg.kick.kickback * b.invMass;
-      b.vy -= ny * this.cfg.kick.kickback * b.invMass;
-    }
+    if (!applyKickImpulse(b, ball, this.cfg)) return false;
     p.kickCooldown = this.settings.kickCooldown;
     p.kickArmed = false;
     p.stats.kicks++;
@@ -533,7 +539,7 @@ export class MatchController {
     for (const p of this.players.values()) {
       if (!p.body) continue;
       const pb = p.body;
-      players.push([p.id, r2(pb.x), r2(pb.y), r2(pb.vx), r2(pb.vy), p.kicking ? 1 : 0]);
+      players.push([p.id, r2(pb.x), r2(pb.y), r2(pb.vx), r2(pb.vy), p.kicking ? 1 : 0, p.kickCooldown, p.kickArmed ? 1 : 0, p.prevKick ? 1 : 0]);
     }
     return {
       tick: this.tickCount,
