@@ -5,6 +5,7 @@ import { getBuiltinArena, BUILTIN_ARENAS } from '../../shared/maps/arenas.js';
 import { validateArena } from '../../shared/maps/arenaValidate.js';
 import { LIMITS, SNAPSHOT_RATES, ADMIN_ACTIONS, cleanText } from '../../shared/protocol/messages.js';
 import { IN_MASK, IN_KICK } from '../../shared/config/physicsConfig.js';
+import { DoublesTournament } from './DoublesTournament.js';
 
 const MAX_BOTS = 8;
 const CRITICAL_EVENTS = new Set(['goal', 'end', 'overtime', 'count', 'whistle', 'phase', 'pause', 'ballReset']);
@@ -38,6 +39,8 @@ export class Room {
     this.bots = new BotManager();
     this.botDifficulty = new Map();
     this.closed = false;
+    this.tournament = null;
+    this.beforeTournament = null;
   }
 
   // ------------------------------------------------------------ helpers
@@ -67,7 +70,7 @@ export class Room {
       players: this.humanCount(),
       bots: this.members.size - this.humanCount(),
       max: this.maxPlayers,
-      mode: `${s.teamSize}v${s.teamSize}`,
+      mode: this.tournament ? 'Campeonato 2v2' : `${s.teamSize}v${s.teamSize}`,
       status: this.match.phase === 'lobby' ? 'lobby' : this.match.phase === 'ended' ? 'ended' : 'playing',
       locked: !!this.passwordHash,
       visibility: this.visibility,
@@ -99,6 +102,7 @@ export class Room {
       winner: m.winner,
       lastGoal: m.lastGoal,
       stats: m.phase === 'ended' || m.phase === 'lobby' ? m.statsTable() : null,
+      tournament: this.tournament?.state() || null,
     };
   }
 
@@ -170,6 +174,7 @@ export class Room {
     if (!m) return;
     this.members.delete(id);
     this.match.removePlayer(id);
+    if (this.tournament?.withdraw(id)) this.match.stop();
     if (m.isBot) { this.bots.remove(id); this.botDifficulty.delete(id); }
     if (m.session) m.session.room = null;
     this.system(`${m.name} saiu${reason ? ` (${reason})` : ''}.`);
@@ -226,6 +231,10 @@ export class Room {
   }
 
   _onTeam(me, msg) {
+    if (this.tournament) {
+      this.send(me, { t: 'err', code: 'locked', msg: 'O campeonato organiza os times automaticamente.' });
+      return;
+    }
     const team = ['red', 'blue', 'spec'].includes(msg.team) ? msg.team : null;
     if (!team) return;
     if (this.teamsLocked && !me.admin) { this.send(me, { t: 'err', code: 'locked', msg: 'Times bloqueados pelo anfitrião.' }); return; }
@@ -246,7 +255,54 @@ export class Room {
     me.adminTimes.push(now);
     const m = this.match;
     const deny = (text) => this.send(me, { t: 'err', code: 'admin', msg: text });
+    if (this.tournament
+        && ['start', 'stop', 'restart', 'move', 'balance', 'lock', 'settings', 'arena', 'addbot', 'rmbot'].includes(a)) {
+      return deny('Use os controles do campeonato; cancele-o para alterar as regras ou os times.');
+    }
     switch (a) {
+      case 'tournament_draw': {
+        if (this.tournament?.status === 'running') return deny('Cancele o campeonato atual antes de sortear novamente.');
+        if (!['lobby', 'ended'].includes(m.phase)) return deny('Pare a partida antes de sortear as duplas.');
+        if ([...this.members.values()].some(p => p.isBot)) return deny('Remova os bots antes do sorteio.');
+        const players = this.humans().filter(p => !p.away);
+        try { this.tournament = new DoublesTournament(players); }
+        catch (e) { return deny(e.message); }
+        this.beforeTournament ||= { settings: { ...m.settings }, locked: this.teamsLocked };
+        m.stop();
+        for (const p of m.players.values()) m.setTeam(p.id, 'spec');
+        m.setSettings({ teamSize: 2, overtime: 'golden', scoreLimit: m.settings.timeLimit || m.settings.scoreLimit ? m.settings.scoreLimit : 3 });
+        this.teamsLocked = true;
+        this.system(`Duplas sorteadas! Campeonato com ${players.length} jogadores. O anfitrião pode iniciar a próxima partida.`);
+        break;
+      }
+      case 'tournament_next': {
+        const tournament = this.tournament;
+        const next = tournament?.nextMatch();
+        if (!next) return deny('Não há próxima partida disponível.');
+        const ids = [...tournament.teams[next.red].players, ...tournament.teams[next.blue].players].map(p => p.id);
+        if (ids.some(id => !this.members.has(id) || this.members.get(id).away)) return deny('Aguarde os quatro jogadores desta partida se conectarem.');
+        m.stop();
+        for (const p of m.players.values()) m.setTeam(p.id, 'spec');
+        for (const [side, team] of [['red', next.red], ['blue', next.blue]]) {
+          for (const p of tournament.teams[team].players) m.setTeam(p.id, side);
+        }
+        for (const p of this.members.values()) { if (p.queue) p.queue.length = 0; p.lastInput = 0; }
+        tournament.start();
+        m.start();
+        this.system(`Campeonato: dupla ${next.red + 1} × dupla ${next.blue + 1}. Os demais assistem.`);
+        break;
+      }
+      case 'tournament_cancel':
+        if (!this.tournament) return deny('Nenhum campeonato criado.');
+        m.stop();
+        for (const p of m.players.values()) m.setTeam(p.id, 'spec');
+        if (this.beforeTournament) {
+          m.setSettings(this.beforeTournament.settings);
+          this.teamsLocked = this.beforeTournament.locked;
+        }
+        this.tournament = null; this.beforeTournament = null;
+        this.system('Campeonato encerrado. A sala voltou ao modo normal.');
+        break;
       case 'move': {
         const t = this._target(msg.id);
         const team = ['red', 'blue', 'spec'].includes(msg.team) ? msg.team : null;
@@ -396,6 +452,12 @@ export class Room {
     this.bots.apply(m);
     const events = m.tick();
     for (const e of events) {
+      if (e.type === 'end' && this.tournament?.current() && ['red', 'blue'].includes(e.winner)) {
+        const tournament = this.tournament;
+        tournament.finish(tournament.current()[e.winner], m.score);
+        this.system(tournament.status === 'finished' ? 'Campeonato concluído! Confira a dupla campeã no lobby.' : 'Resultado registrado! A próxima partida está pronta no lobby.');
+        this.markDirty();
+      }
       if (e.type === 'goal') {
         const who = e.scorer != null ? this.members.get(e.scorer)?.name : null;
         const team = e.team === 'red' ? 'Vermelho' : 'Azul';

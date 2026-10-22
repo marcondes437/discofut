@@ -93,7 +93,15 @@ Depois de abrir o jogo uma vez por `http(s)`, um *service worker* guarda os arqu
 5. Chat com mensagens de sistema, limite de 140 caracteres e 5 mensagens a cada 5 s; texto sanitizado.
 6. O HUD mostra ping, jitter e snapshots atrasados. Se a conexão cair, o cliente reconecta sozinho e o servidor guarda seu lugar por 25 s. Se o anfitrião sair, a administração passa a outra pessoa.
 
-### Como funciona a rede
+### Campeonato de duplas
+
+No lobby, abra **Campeonato de duplas**. O anfitrião pode usar **Permitir até 16 participantes** para aumentar a capacidade da sala. Reúna de 4 a 16 jogadores em quantidade par, incluindo os espectadores, remova os bots e pare qualquer partida normal.
+
+Clique em **Sortear duplas** para formar pares aleatórios e a chave de mata-mata. **Iniciar próxima partida** coloca somente as duas duplas do confronto em campo, em 2v2; os demais assistem. Depois de cada resultado, volte ao lobby com Esc e inicie a próxima partida. Os vencedores avançam até a final e a dupla campeã aparece na chave.
+
+O torneio mantém os limites de tempo e gols da sala, usa gol de ouro para desempatar e distribui folgas quando necessário. Se tempo e gols estavam sem limite, passa a usar 3 gols. Os times e as regras ficam bloqueados durante o campeonato. Uma queda de conexão mantém o lugar por 25 segundos; a saída definitiva elimina a dupla por W.O. **Cancelar campeonato** ou **Voltar ao modo normal** restaura as regras anteriores. O campeonato fica na memória: reiniciar o servidor apaga a chave.
+
+### Sincronização da rede
 
 - O cliente envia **apenas** `{t:'in', s:seq, k:bits}` a cada tick (60 Hz). O servidor descarta sequências antigas e usa a direção mais recente no próximo tick, preservando toques rápidos de chute; se o cliente travar, solta as teclas após 500 ms.
 - O servidor simula a 60 Hz com o mesmo código de `shared/` e publica snapshots (60 Hz por padrão; 20/30/60 Hz, configurável) com o número da última entrada processada (`a`).
@@ -209,7 +217,7 @@ Formato próprio `discofut-arena` v1:
 npm test
 ```
 
-73 testes: colisões frontal/oblíqua, conservação de momento, rebote, tunelamento a velocidade máxima, traves, canto, estabilidade 10 s com 4 jogadores prensando a bola, determinismo, gol limítrofe (rente à trave por dentro/fora, bola parada sobre a linha), gol único, kickoff, chutes/cooldown, diagonais, fim por gols/tempo/gol de ouro, autoria/assistência/gol contra, bots (partidas completas, papéis, difícil > fácil), validação de arenas maliciosas e um servidor real com clientes WebSocket (salas, senha, permissões, chat, sincronização, gol decidido pelo servidor, bots, expulsão, reconexão, transferência de anfitrião, *path traversal*).
+85 testes: colisões frontal/oblíqua, conservação de momento, rebote, tunelamento a velocidade máxima, traves, canto, estabilidade 10 s com 4 jogadores prensando a bola, determinismo, gol limítrofe (rente à trave por dentro/fora, bola parada sobre a linha), gol único, kickoff, chutes/cooldown, diagonais, fim por gols/tempo/gol de ouro, autoria/assistência/gol contra, bots (partidas completas, papéis, difícil > fácil), validação de arenas maliciosas e um servidor real com clientes WebSocket (salas, senha, permissões, chat, sincronização, gol decidido pelo servidor, bots, expulsão, reconexão, transferência de anfitrião, *path traversal*).
 
 Teste ponta a ponta opcional com navegadores reais:
 

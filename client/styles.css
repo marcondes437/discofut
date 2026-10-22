@@ -176,6 +176,18 @@ table.list td.num { font-variant-numeric: tabular-nums; }
 .settings-box .form-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
 .settings-box fieldset { border: 0; padding: 0; margin: 0; }
 .settings-box fieldset:disabled { opacity: .6; }
+
+.tournament-box { margin-top: 16px; padding: 16px; background: #161b22; border: 1px solid var(--line); border-radius: 10px; }
+.tournament-box h3 { margin: 0 0 8px; }
+.tournament-roster { padding-left: 20px; line-height: 1.8; overflow-wrap: anywhere; }
+.tournament-rounds { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-top: 16px; }
+.tournament-round { min-width: 0; }
+.tournament-round h4 { margin: 0 0 10px; color: var(--muted); }
+.tournament-match { padding: 12px; margin-bottom: 10px; border: 1px solid var(--line); border-radius: 8px; overflow-wrap: anywhere; }
+.tournament-match.live { border-color: var(--accent, #f5c542); }
+.tournament-match p { margin: 8px 0; }
+.tournament-match strong { display: block; font-size: 12px; margin-top: 10px; color: #4cc38a; }
+.tournament-champion { padding: 12px; color: #f5c542; font-weight: 700; border: 1px solid #f5c542; border-radius: 8px; }
 .popmenu { position: fixed; z-index: 50; background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px; padding: 4px; min-width: 180px; box-shadow: 0 10px 30px rgba(0,0,0,.5); display: flex; flex-direction: column; }
 .popmenu button { background: none; border: 0; text-align: left; padding: 7px 10px; border-radius: 6px; cursor: pointer; }
 .popmenu button:hover, .popmenu button:focus { background: #33404f; outline: none; }

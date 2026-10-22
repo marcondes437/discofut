@@ -15,7 +15,7 @@ export const LIMITS = Object.freeze({
   msgPerSecond: 140,            // limite geral (entradas a 60 Hz + folga)
   adminPerSecond: 10,
   maxRooms: 100,
-  maxConnectionsPerIp: 12,
+  maxConnectionsPerIp: 32,
   minPlayers: 2,
   maxPlayers: 16,
   inputQueueMax: 6,
@@ -28,6 +28,7 @@ export const SNAPSHOT_RATES = [20, 30, 60];
 export const ADMIN_ACTIONS = Object.freeze([
   'move', 'kick', 'ban', 'mute', 'unmute', 'admin', 'start', 'stop', 'restart',
   'pause', 'resume', 'balance', 'settings', 'arena', 'addbot', 'rmbot', 'clearbans', 'lock',
+  'tournament_draw', 'tournament_next', 'tournament_cancel',
 ]);
 
 /** Remove controles/marcação e limita tamanho. */

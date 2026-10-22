@@ -39,6 +39,42 @@ class TestClient {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+test('campeonato por WebSocket: 16 pessoas no mesmo IP, sorteio compartilhado e uma partida ativa', async (t) => {
+  const srv = await createGameServer({ port: 0, host: '127.0.0.1', quiet: true });
+  const clients = [];
+  t.after(async () => { for (const client of clients) client.close(); await srv.close(); });
+  for (let i = 0; i < 16; i++) clients.push(await new TestClient(srv.port, `Duplas ${i}`).open());
+  const host = clients[0];
+  host.send({ t: 'create', name: 'Campeonato', maxPlayers: 16, settings: { timeLimit: 1, scoreLimit: 1 } });
+  const joined = await host.wait(m => m.t === 'joined');
+  for (const client of clients.slice(1)) {
+    client.send({ t: 'join', code: joined.room.code });
+    await client.wait(m => m.t === 'joined');
+  }
+  clients[1].send({ t: 'admin', a: 'tournament_draw' });
+  await clients[1].wait(m => m.t === 'err' && m.code === 'forbidden');
+  host.send({ t: 'admin', a: 'tournament_draw' });
+  const draws = await Promise.all(clients.map(c => c.wait(m => m.t === 'room' && m.room.tournament?.teams.length === 8)));
+  for (const result of draws) assert.deepEqual(result.room.tournament.teams, draws[0].room.tournament.teams);
+  host.send({ t: 'admin', a: 'tournament_next' });
+  const active = await clients[15].wait(m => m.t === 'room' && m.room.tournament?.active);
+  assert.equal(active.room.members.filter(p => p.team === 'red').length, 2);
+  assert.equal(active.room.members.filter(p => p.team === 'blue').length, 2);
+  assert.equal(active.room.members.filter(p => p.team === 'spec').length, 12);
+  host.send({ t: 'admin', a: 'tournament_next' });
+  await host.wait(m => m.t === 'err' && m.code === 'admin');
+  const match = srv.manager.rooms.get(joined.room.code).match;
+  match.phase = 'playing';
+  Object.assign(match.ball, { x: match.geo.W + match.ball.r - 1, y: 0, vx: 4, vy: 0 });
+  await host.wait(m => m.t === 'ev' && m.e.type === 'end', 6000);
+  const result = await clients[15].wait(m => m.t === 'room' && m.room.tournament?.rounds[0][0].status === 'done');
+  assert.equal(result.room.tournament.active, null);
+  assert.ok(result.room.tournament.next);
+  host.send({ t: 'admin', a: 'tournament_cancel' });
+  const cancelled = await clients[15].wait(m => m.t === 'room' && m.rv > result.rv && !m.room.tournament);
+  assert.equal(cancelled.room.settings.teamsLocked, false);
+});
+
 test('servidor: salas reais, sincronização, autoridade e administração', async (t) => {
   const srv = await createGameServer({ port: 0, host: '127.0.0.1', quiet: true });
   t.after(() => srv.close());

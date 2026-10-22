@@ -53,11 +53,13 @@ export class RoomLobby {
     const botTeam = select([['red', 'Vermelho'], ['blue', 'Azul']], 'blue', { class: 'input', 'aria-label': 'Time do bot' });
     const botDiff = select([['easy', 'Fácil'], ['medium', 'Médio'], ['hard', 'Difícil']], 'medium', { class: 'input', 'aria-label': 'Dificuldade do bot' });
     const btnBot = h('button', { class: 'btn', type: 'button', onclick: () => this.admin('addbot', { team: botTeam.value, difficulty: botDiff.value }) }, '+ Bot');
+    this.btnBot = btnBot;
     this.adminBar = h('div', {},
       h('div', { class: 'btn-row' }, this.btnStart, this.btnStop, this.btnRestart, this.btnPause, this.btnBalance, this.btnLock),
       h('div', { class: 'btn-row', style: { alignItems: 'center' } }, botTeam, botDiff, btnBot, h('span', { class: 'note' }, 'Bots aparecem marcados como BOT.')));
     this.nonAdminNote = h('p', { class: 'note' }, 'Só o anfitrião/administradores iniciam a partida e alteram regras. Use "Entrar" para escolher um time.');
     this.resultsBox = h('div', {});
+    this.tournamentBox = h('section', { class: 'tournament-box', 'aria-label': 'Campeonato de duplas' });
 
     // Configurações da sala.
     const S = (opts, key, cast = Number) => {
@@ -87,7 +89,7 @@ export class RoomLobby {
 
     return h('section', { class: 'screen wide', 'aria-label': 'Sala' }, head,
       h('div', { class: 'room-layout' },
-        h('div', {}, columns, this.adminBar, this.nonAdminNote, this.resultsBox),
+        h('div', {}, columns, this.adminBar, this.nonAdminNote, this.tournamentBox, this.resultsBox),
         h('div', { class: 'room-side' }, settingsBox, this.chat.box)));
   }
 
@@ -124,7 +126,7 @@ export class RoomLobby {
     const r = this.game.room;
     const items = [];
     for (const [team, label] of [['red', 'Mover para Vermelho'], ['spec', 'Mover para Espectadores'], ['blue', 'Mover para Azul']]) {
-      if (m.team !== team) items.push({ label, action: () => this.admin('move', { id: m.id, team }) });
+      if (!r.tournament && m.team !== team) items.push({ label, action: () => this.admin('move', { id: m.id, team }) });
     }
     items.push('-');
     if (m.bot) items.push({ label: 'Remover bot', danger: true, action: () => this.admin('rmbot', { id: m.id }) });
@@ -156,7 +158,7 @@ export class RoomLobby {
     this.connEl.className = `conn-state ${net.state === 'open' ? 'ok' : net.state === 'reconnecting' ? 'mid' : 'bad'}`;
 
     const teamSize = room.settings.teamSize;
-    const locked = room.settings.teamsLocked && !isAdmin;
+    const locked = !!room.tournament || (room.settings.teamsLocked && !isAdmin);
     for (const team of ['red', 'spec', 'blue']) {
       const c = this.cols[team];
       const list = room.members.filter((m) => m.team === team);
@@ -185,8 +187,11 @@ export class RoomLobby {
     this.btnPause.hidden = !running || room.phase === 'ended';
     this.btnPause.textContent = room.paused ? 'Retomar' : 'Pausar';
     this.btnLock.textContent = room.settings.teamsLocked ? 'Desbloquear times' : 'Bloquear times';
+    for (const button of [this.btnStart, this.btnStop, this.btnRestart, this.btnBalance, this.btnLock]) button.disabled = !!room.tournament;
+    this.btnBot.disabled = !!room.tournament;
 
-    this.settingsFs.disabled = !isAdmin;
+    this.settingsFs.disabled = !isAdmin || !!room.tournament;
+    this._updateTournament(room, isAdmin);
     for (const [k, inp] of Object.entries(this.setInputs)) {
       if (document.activeElement === inp) continue;
       const v = k === 'maxPlayers' ? room.maxPlayers : room.settings[k];
@@ -212,6 +217,58 @@ export class RoomLobby {
       this.resultsBox.append(h('h3', {}, `Resultado: ${w} — ${room.score.red} × ${room.score.blue}`), statsTable(room.stats),
         game.replay.hasReplay() ? h('div', { class: 'btn-row' }, h('button', { class: 'btn', type: 'button', onclick: () => { this.app.hideLobby(); game.startReplay(); } }, 'Replay do último gol (local)')) : '');
     }
+  }
+
+  _updateTournament(room, isAdmin) {
+    const t = room.tournament;
+    const players = room.members.filter(p => !p.bot && !p.away);
+    const canDraw = players.length >= 4 && players.length <= 16 && players.length % 2 === 0
+      && !room.members.some(p => p.bot) && ['lobby', 'ended'].includes(room.phase);
+    const teamName = id => id === null ? 'A definir' : t.teams[id].players.map(p => p.name).join(' + ');
+    const buttons = [];
+    if (isAdmin) {
+      if (!t && room.maxPlayers < 16) buttons.push(h('button', {
+        class: 'btn', type: 'button', onclick: () => this.admin('settings', { settings: { maxPlayers: 16 } }),
+      }, 'Permitir até 16 participantes'));
+      if (!t || t.status === 'finished') buttons.push(h('button', {
+        class: 'btn primary', type: 'button', disabled: !canDraw,
+        onclick: () => this.admin('tournament_draw'),
+      }, t ? 'Novo sorteio' : 'Sortear duplas'));
+      if (t?.status === 'running') buttons.push(h('button', {
+        class: 'btn primary', type: 'button', disabled: !t.next,
+        onclick: () => this.admin('tournament_next'),
+      }, t.active ? 'Partida em andamento' : 'Iniciar próxima partida'));
+      if (t) buttons.push(h('button', {
+        class: 'btn', type: 'button',
+        onclick: () => { if (t.status === 'finished' || confirm('Cancelar o campeonato e voltar ao modo normal?')) this.admin('tournament_cancel'); },
+      }, t.status === 'finished' ? 'Voltar ao modo normal' : 'Cancelar campeonato'));
+    }
+    const content = [h('h3', {}, 'Campeonato de duplas'),
+      h('p', { class: 'note' }, t
+        ? 'Mata-mata 2v2. Uma partida por vez; os demais assistem. Empates vão para gol de ouro.'
+        : `${players.length}/16 jogadores presentes. Reúna de 4 a 16 pessoas, em quantidade par. O sorteio inclui os espectadores. Remova os bots e pare a partida para sortear.`),
+      h('div', { class: 'btn-row' }, buttons)];
+    if (t) {
+      if (t.status === 'finished') content.push(h('p', { class: 'tournament-champion', role: 'status' },
+        t.champion === null ? 'Campeonato encerrado sem campeão.' : `Dupla campeã: ${teamName(t.champion)}`));
+      const roster = h('ul', { class: 'tournament-roster' }, t.teams.map(team =>
+        h('li', {}, `Dupla ${team.id + 1}: ${teamName(team.id)}${team.withdrawn ? ' — desistiu' : ''}`)));
+      content.push(roster, h('div', { class: 'tournament-rounds' }, t.rounds.map((matches, r) => {
+        const remaining = t.rounds.length - r;
+        const title = remaining === 1 ? 'Final' : remaining === 2 ? 'Semifinais' : 'Quartas de final';
+        return h('section', { class: 'tournament-round', 'aria-label': title }, h('h4', {}, title), matches.map((match, i) => {
+          const next = t.next?.round === r && t.next?.index === i;
+          const label = match.status === 'playing' ? 'Em jogo' : next ? 'Próxima partida' : match.status === 'bye' ? match.reason : match.status === 'done' ? 'Encerrada' : 'Aguardando';
+          return h('div', { class: `tournament-match ${match.status === 'playing' || next ? 'live' : ''}` },
+            h('span', { class: 'pill' }, label),
+            h('p', {}, match.red === null && match.status === 'bye' ? 'Folga' : teamName(match.red)),
+            h('span', { class: 'note' }, match.score ? `${match.score.red} × ${match.score.blue}` : '×'),
+            h('p', {}, match.blue === null && match.status === 'bye' ? 'Folga' : teamName(match.blue)),
+            match.winner !== null ? h('strong', {}, `Avançou: ${teamName(match.winner)}${match.reason === 'W.O.' ? ' (W.O.)' : ''}`) : '');
+        }));
+      })));
+    }
+    this.tournamentBox.replaceChildren(...content);
   }
 
   dispose() { this.chat.dispose(); }
