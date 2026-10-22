@@ -41,7 +41,7 @@ export class RoomManager {
         }
       }
       this._gcSessions();
-    }, 4);
+    }, 2);
     this._loop.unref?.();
   }
 

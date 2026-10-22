@@ -96,7 +96,7 @@ Depois de abrir o jogo uma vez por `http(s)`, um *service worker* guarda os arqu
 ### Como funciona a rede
 
 - O cliente envia **apenas** `{t:'in', s:seq, k:bits}` a cada tick (60 Hz). O servidor descarta sequências antigas e usa a direção mais recente no próximo tick, preservando toques rápidos de chute; se o cliente travar, solta as teclas após 500 ms.
-- O servidor simula a 60 Hz com o mesmo código de `shared/` e publica snapshots (20/30/60 Hz, configurável) com o número da última entrada processada (`a`).
+- O servidor simula a 60 Hz com o mesmo código de `shared/` e publica snapshots (60 Hz por padrão; 20/30/60 Hz, configurável) com o número da última entrada processada (`a`).
 - Jogadores e bola compartilham a mesma linha do tempo prevista durante a partida. Sem predição ou como espectador, usa **interpolação** curta adaptativa ao jitter.
 - Próprio jogador: **predição** com as mesmas funções de movimento e **reconciliação** (reaplica entradas não confirmadas; correções pequenas são suavizadas). Desligável em Configurações.
 - Gol, relógio, saída de bola, pausa, times, chat e administração vêm do servidor (eventos confiáveis + estado da sala versionado `rv`).
@@ -209,7 +209,7 @@ Formato próprio `discofut-arena` v1:
 npm test
 ```
 
-72 testes: colisões frontal/oblíqua, conservação de momento, rebote, tunelamento a velocidade máxima, traves, canto, estabilidade 10 s com 4 jogadores prensando a bola, determinismo, gol limítrofe (rente à trave por dentro/fora, bola parada sobre a linha), gol único, kickoff, chutes/cooldown, diagonais, fim por gols/tempo/gol de ouro, autoria/assistência/gol contra, bots (partidas completas, papéis, difícil > fácil), validação de arenas maliciosas e um servidor real com clientes WebSocket (salas, senha, permissões, chat, sincronização, gol decidido pelo servidor, bots, expulsão, reconexão, transferência de anfitrião, *path traversal*).
+73 testes: colisões frontal/oblíqua, conservação de momento, rebote, tunelamento a velocidade máxima, traves, canto, estabilidade 10 s com 4 jogadores prensando a bola, determinismo, gol limítrofe (rente à trave por dentro/fora, bola parada sobre a linha), gol único, kickoff, chutes/cooldown, diagonais, fim por gols/tempo/gol de ouro, autoria/assistência/gol contra, bots (partidas completas, papéis, difícil > fácil), validação de arenas maliciosas e um servidor real com clientes WebSocket (salas, senha, permissões, chat, sincronização, gol decidido pelo servidor, bots, expulsão, reconexão, transferência de anfitrião, *path traversal*).
 
 Teste ponta a ponta opcional com navegadores reais:
 

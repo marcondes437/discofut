@@ -60,6 +60,7 @@ test('servidor: salas reais, sincronização, autoridade e administração', asy
     assert.equal(j.room.name, 'Pelada b', 'nome sanitizado');
     assert.equal(j.room.hostId, A.id);
     assert.equal(j.room.arena.id, 'compact');
+    assert.equal(j.room.settings.snapshotRate, 60, 'novas salas enviam atualizações a cada tick');
     B.send({ t: 'list' });
     const r = await B.wait((m) => m.t === 'rooms');
     assert.equal(r.list.length, 1);

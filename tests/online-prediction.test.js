@@ -209,3 +209,15 @@ test('an opponent stops being extrapolated indefinitely during missing snapshots
   assert.equal(body.x, x);
   assert.equal(body.vx, 0);
 });
+
+test('stable LAN connections settle opponent corrections faster than jittery connections', () => {
+  const stable = movingOpponent();
+  const jittery = movingOpponent();
+  stable.game.net.jitter = 0;
+  jittery.game.net.jitter = 30;
+  for (const { game } of [stable, jittery]) {
+    game.remoteSmooth.set(2, { x: 5, y: 0 });
+    game.render(1, 1 / 60);
+  }
+  assert.ok(Math.abs(stable.game.remoteSmooth.get(2).x) < Math.abs(jittery.game.remoteSmooth.get(2).x));
+});

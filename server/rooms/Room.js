@@ -29,7 +29,7 @@ export class Room {
     this.rv = 0;
     this.dirty = true;
     this.bans = new Map();                      // chave (token/ip) → expira em
-    this.snapshotRate = 30;
+    this.snapshotRate = 60;
     this.teamsLocked = false;
     this.pendingEvents = [];
     this.lastPingBroadcast = 0;

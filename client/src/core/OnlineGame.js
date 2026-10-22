@@ -362,7 +362,9 @@ export class OnlineGame {
     this.smoothX *= decay; this.smoothY *= decay;
     const ballDecay = Math.exp(-dt * 25);
     this.ballSmoothX *= ballDecay; this.ballSmoothY *= ballDecay;
-    const remoteDecay = Math.exp(-dt * 24);
+    // Stable LAN connections can settle corrections in about one physics tick.
+    const correctionRate = Math.max(24, Math.min(60, 1000 / (MS_PER_TICK + (this.net.jitter || 0) * 2)));
+    const remoteDecay = Math.exp(-dt * correctionRate);
     for (const offset of this.remoteSmooth.values()) {
       offset.x *= remoteDecay; offset.y *= remoteDecay;
     }
