@@ -29,10 +29,11 @@ export const physicsConfig = Object.freeze({
     maxSpeed: 22,          // limite de segurança (px/tick)
   }),
   kick: Object.freeze({
-    strength: 5.2,         // impulso adicionado à velocidade da bola
-    range: 4.5,            // distância máxima entre as superfícies jogador-bola
+    strength: 6.4,         // impulso adicionado à velocidade da bola
+    range: 5.5,            // distância máxima entre as superfícies jogador-bola
     kickback: 0.0,         // recuo aplicado ao jogador
-    defaultCooldown: 8,    // ticks mínimos entre chutes do mesmo jogador
+    defaultCooldown: 6,    // ticks mínimos entre chutes do mesmo jogador
+    bufferTicks: 6,        // preserva toques rápidos por até 100 ms
   }),
   wall: Object.freeze({
     bounce: 1,             // multiplicado pelo "bounce" do corpo

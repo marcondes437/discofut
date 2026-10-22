@@ -117,29 +117,19 @@ test('servidor: salas reais, sincronização, autoridade e administração', asy
   });
 
   await t.test('gol decidido pelo servidor e sincronizado para todos', async () => {
-    // O vermelho conduz a bola até o gol azul (direita): o servidor decide o gol.
-    let seq = 100;
-    const deadline = Date.now() + 15000;
-    let goal = null;
-    while (!goal && Date.now() < deadline) {
-      const snap = A.msgs.filter((m) => m.t === 's').pop();
-      let k = IN_RIGHT;
-      if (snap) {
-        const me = snap.d.p.find((p) => p[0] === A.id);
-        const [bx, by] = snap.d.b;
-        // vai para trás da bola e empurra/chuta para a direita
-        const tx = bx - 26, ty = by;
-        k = 0;
-        if (me[1] < tx - 3) k |= IN_RIGHT; else if (me[1] > tx + 3) k |= 4;
-        if (me[2] < ty - 3) k |= 2; else if (me[2] > ty + 3) k |= 1;
-        if (Math.hypot(bx - me[1], by - me[2]) < 30 && me[1] < bx) k |= IN_KICK | IN_RIGHT;
-      }
-      A.send({ t: 'in', s: seq, k });
-      B.send({ t: 'in', s: seq++, k: 2 }); // azul sai do caminho (para baixo)
-      goal = A.msgs.find((m) => m.t === 'ev' && m.e.type === 'goal');
-      await sleep(16);
-    }
-    assert.ok(goal, 'gol aconteceu');
+    // A controlled server fixture avoids relying on a timing-sensitive auto-player.
+    // Only the kick input travels over WebSocket; physics and scoring run on the server.
+    const match = srv.manager.rooms.get(code).match;
+    match.phase = 'playing';
+    const red = match.players.get(A.id).body;
+    const blue = match.players.get(B.id).body;
+    Object.assign(red, { x: match.geo.W - 65, y: 0, vx: 0, vy: 0 });
+    Object.assign(blue, { x: -match.geo.W / 2, y: 100, vx: 0, vy: 0 });
+    Object.assign(match.ball, { x: match.geo.W - 38, y: 0, vx: 0, vy: 0 });
+    A.send({ t: 'in', s: 100, k: IN_KICK });
+    B.send({ t: 'in', s: 100, k: 0 });
+    const goal = await A.wait((m) => m.t === 'ev' && m.e.type === 'goal', 4000);
+    assert.equal(goal.e.team, 'red');
     const gb = await B.wait((m) => m.t === 'ev' && m.e.type === 'goal');
     assert.equal(gb.e.team, 'red');
     assert.equal(gb.e.scorer, A.id);

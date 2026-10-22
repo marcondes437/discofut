@@ -1,7 +1,7 @@
 import { physicsConfig, IN_KICK, TICK_RATE } from '@shared/config/physicsConfig.js';
 import { PhysicsWorld, createBody } from '@shared/physics/PhysicsWorld.js';
 import { buildArenaGeometry } from '@shared/maps/arenaGeometry.js';
-import { applyMovementInput, applyKickImpulse, kickoffConstraint } from '@shared/game/MatchController.js';
+import { applyMovementInput, applyKickImpulse, updateKickInput, kickoffConstraint } from '@shared/game/MatchController.js';
 import { ReplayBuffer } from '../replay/ReplayBuffer.js';
 
 const MS_PER_TICK = 1000 / TICK_RATE;
@@ -87,7 +87,8 @@ export class OnlineGame {
     this.smoothX = 0; this.smoothY = 0;
     this.ballSmoothX = 0; this.ballSmoothY = 0;
     this.predPhase = null;
-    this.predKick = { prevKick: false, kickArmed: false, kickCooldown: 0 };
+    this.predKick = { prevKick: false, kickArmed: false, kickBuffer: 0, kickCooldown: 0 };
+    this.predictedKickSounds = [];
     if (this.myTeam === 'spec') return;
     this.predBall = this.predWorld.addBody(createBody('ball'));
     const b = createBody('player');
@@ -101,7 +102,11 @@ export class OnlineGame {
   _onSnapshot(msg) {
     const now = performance.now();
     const d = msg.d;
-    if (this.latest && d.tick <= this.latest.tick && d.ph !== 'lobby') return; // fora de ordem
+    if (this.latest && d.ph !== 'lobby') {
+      if (d.tick < this.latest.tick) return;
+      if (d.tick === this.latest.tick && d.ph === this.latest.ph && d.pa === this.latest.pa
+          && msg.a <= this.ack && !msg.e?.length) return;
+    }
     if (this.stats.lastRecv) {
       const gap = now - this.stats.lastRecv;
       const expected = 1000 / (this.room?.settings.snapshotRate || 30);
@@ -114,10 +119,18 @@ export class OnlineGame {
     if (this.tickOffset === null || Math.abs(off - this.tickOffset) > 30) this.tickOffset = off;
     else this.tickOffset += (off - this.tickOffset) * 0.06;
     this.latest = d;
+    if (this.snaps.at(-1)?.tick === d.tick) this.snaps.pop();
     this.snaps.push({ tick: d.tick, d });
     if (this.snaps.length > 40) this.snaps.shift();
     if (msg.e && msg.e.length) {
-      const evs = msg.e.map((x) => (x[0] === 'k' ? { type: 'kick', id: x[1] } : { type: 'impact', kind: x[1], speed: x[2] }));
+      this.predictedKickSounds = this.predictedKickSounds.filter((sound) => now - sound.at < 1500);
+      const evs = msg.e.filter((x) => {
+        if (x[0] !== 'k' || x[1] !== this.myId) return true;
+        const index = this.predictedKickSounds.findIndex((sound) => sound.seq <= msg.a);
+        if (index < 0) return true;
+        this.predictedKickSounds.splice(index, 1);
+        return false;
+      }).map((x) => (x[0] === 'k' ? { type: 'kick', id: x[1] } : { type: 'impact', kind: x[1], speed: x[2] }));
       this.app.audio.playEvents(evs);
     }
     this.ack = msg.a;
@@ -136,7 +149,7 @@ export class OnlineGame {
     const ball = this.predBall;
     [ball.x, ball.y, ball.vx, ball.vy] = d.b;
     ball.px = ball.x; ball.py = ball.y;
-    this.predKick = { kickCooldown: mine[6] || 0, kickArmed: !!mine[7], prevKick: !!mine[8] };
+    this.predKick = { kickCooldown: mine[6] || 0, kickArmed: !!mine[7], prevKick: !!mine[8], kickBuffer: mine[10] || 0 };
     // Rebuild all discs from the authoritative state before replaying inputs.
     this.predWorld.bodies.length = 0;
     this.predWorld.addBody(ball);
@@ -145,14 +158,14 @@ export class OnlineGame {
       const remote = createBody('player', p[1], p[2]);
       remote.id = p[0]; remote.vx = p[3]; remote.vy = p[4];
       remote.input = p[9] || 0;
-      remote.kickState = { kickCooldown: p[6] || 0, kickArmed: !!p[7], prevKick: !!p[8] };
+      remote.kickState = { kickCooldown: p[6] || 0, kickArmed: !!p[7], prevKick: !!p[8], kickBuffer: p[10] || 0 };
       this.predWorld.addBody(remote);
     }
     // Reaplica as entradas ainda não confirmadas pelo servidor.
     for (let s = Math.max(1, this.ack + 1, this.seq - HISTORY + 1); s <= this.seq; s++) {
       const h = this.history[s % HISTORY];
       if (!h || h.s !== s) continue;
-      this._predStep(h.k, d.ph, d.kt);
+      this._predStep(h.k, d.ph, d.kt, true);
     }
     const ballEx = oldBallX - ball.x, ballEy = oldBallY - ball.y;
     const continuous = this.predValid && this.predPhase === d.ph && !d.pa;
@@ -170,12 +183,19 @@ export class OnlineGame {
     this.predValid = true;
   }
 
-  _predStep(bits, phase, kickoffTeam) {
+  _predStep(bits, phase, kickoffTeam, replaying = false) {
     const b = this.predBody;
     if (this.latest?.pa || (phase !== 'playing' && phase !== 'kickoff')) return;
     for (const body of this.predWorld.bodies) {
       if (body.kind !== 'player') continue;
-      this._predictInput(body, body === b ? bits : body.input, body === b ? this.predKick : body.kickState);
+      const fired = this._predictInput(body, body === b ? bits : body.input, body === b ? this.predKick : body.kickState);
+      if (fired && body === b && !replaying) {
+        this.app.audio.playEvents([{ type: 'kick', id: this.myId }]);
+        const now = performance.now();
+        this.predictedKickSounds = this.predictedKickSounds.filter((sound) => now - sound.at < 1500);
+        this.predictedKickSounds.push({ seq: this.seq, at: now });
+        this.ballSmoothX = 0; this.ballSmoothY = 0;
+      }
     }
     const team = this.myTeam;
     const kr = this.geo.kickoffRadius;
@@ -188,16 +208,7 @@ export class OnlineGame {
 
   _predictInput(b, bits, k) {
     applyMovementInput(b, bits, physicsConfig);
-    const held = (bits & IN_KICK) !== 0;
-    if (held && !k.prevKick) k.kickArmed = true;
-    if (!held) k.kickArmed = false;
-    if (k.kickCooldown > 0) k.kickCooldown--;
-    if (held && k.kickCooldown === 0 && (this.room.settings.kickMode === 'repeat' || k.kickArmed)
-        && applyKickImpulse(b, this.predBall)) {
-      k.kickCooldown = this.room.settings.kickCooldown;
-      k.kickArmed = false;
-    }
-    k.prevKick = held;
+    return updateKickInput(k, bits, this.room.settings, () => applyKickImpulse(b, this.predBall));
   }
 
   _onEvent(e) {
@@ -213,7 +224,7 @@ export class OnlineGame {
   // -------------------------------------------------------------- loop
   canControl() {
     const ph = this.latest?.ph || this.room?.phase;
-    return this.myTeam !== 'spec' && ph && ph !== 'lobby' && ph !== 'countdown' && !this.room?.paused;
+    return this.myTeam !== 'spec' && ph && ph !== 'lobby' && ph !== 'countdown' && !(this.latest?.pa ?? this.room?.paused);
   }
 
   tick() {

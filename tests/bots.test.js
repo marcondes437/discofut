@@ -6,7 +6,8 @@ import { getBuiltinArena } from '../shared/maps/arenas.js';
 import { IN_MASK } from '../shared/config/physicsConfig.js';
 
 function botMatch(size, diffRed, diffBlue, minutes = 2, arena = 'classic') {
-  const m = new MatchController({ arena: getBuiltinArena(arena), settings: { timeLimit: minutes, scoreLimit: 0, countdown: false } });
+  // Completion tests have a fixed time budget; golden goal may continue indefinitely after a tie.
+  const m = new MatchController({ arena: getBuiltinArena(arena), settings: { timeLimit: minutes, scoreLimit: 0, countdown: false, overtime: 'draw' } });
   const bots = new BotManager();
   let id = 1;
   for (let i = 0; i < size; i++) { m.addPlayer(id, { team: 'red', isBot: true }); bots.add(id++, diffRed); }

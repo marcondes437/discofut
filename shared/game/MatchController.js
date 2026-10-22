@@ -13,7 +13,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   scoreLimit: 3,        // gols (0 = sem limite)
   overtime: 'golden',   // 'golden' (gol de ouro) | 'draw' (termina empatado)
   kickMode: 'press',    // 'press' (1 chute por toque) | 'repeat' (repete enquanto segura)
-  kickCooldown: 8,      // ticks
+  kickCooldown: physicsConfig.kick.defaultCooldown, // ticks
   teamSize: 4,          // máximo por time (1v1..4v4)
   allowEmptyTeams: false,
   countdown: true,
@@ -48,13 +48,39 @@ export function applyKickImpulse(b, ball, cfg = physicsConfig) {
   if (d - b.r - ball.r > cfg.kick.range) return false; // impede chute remoto
   const nx = d > 1e-6 ? dx / d : 1;
   const ny = d > 1e-6 ? dy / d : 0;
-  ball.vx += nx * cfg.kick.strength * ball.invMass;
-  ball.vy += ny * cfg.kick.strength * ball.invMass;
+  const strength = cfg.kick.strength * ball.invMass;
+  const along = ball.vx * nx + ball.vy * ny;
+  // A receiving shot must leave the foot, even against a fast incoming pass.
+  const impulse = Math.max(strength, strength * 0.75 - along);
+  ball.vx += nx * impulse;
+  ball.vy += ny * impulse;
   if (cfg.kick.kickback) {
     b.vx -= nx * cfg.kick.kickback * b.invMass;
     b.vy -= ny * cfg.kick.kickback * b.invMass;
   }
   return true;
+}
+
+/** Shared timing for offline play, the server and online prediction. */
+export function updateKickInput(state, bits, settings, tryKick, cfg = physicsConfig) {
+  const held = (bits & IN_KICK) !== 0;
+  if (held && !state.prevKick) {
+    state.kickArmed = true;
+    state.kickBuffer = cfg.kick.bufferTicks;
+  }
+  if (!held && !state.kickBuffer) state.kickArmed = false;
+  state.kicking = held;
+  if (state.kickCooldown > 0) state.kickCooldown--;
+  const requested = (state.kickArmed && (held || state.kickBuffer > 0))
+    || (held && settings.kickMode === 'repeat');
+  const fired = requested && state.kickCooldown === 0 && tryKick();
+  if (fired) {
+    state.kickCooldown = settings.kickCooldown;
+    state.kickArmed = false;
+    state.kickBuffer = 0;
+  } else if (state.kickBuffer > 0) state.kickBuffer--;
+  state.prevKick = held;
+  return !!fired;
 }
 
 /**
@@ -174,7 +200,7 @@ export class MatchController {
   addPlayer(id, { name = 'Jogador', team = 'spec', isBot = false } = {}) {
     const p = {
       id, name, team: 'spec', isBot,
-      input: 0, prevKick: false, kickArmed: false, kickCooldown: 0, kicking: false,
+      input: 0, prevKick: false, kickArmed: false, kickBuffer: 0, kickCooldown: 0, kicking: false,
       body: null, stats: newStats(), joinedAt: this.tickCount,
     };
     this.players.set(id, p);
@@ -210,7 +236,7 @@ export class MatchController {
     if (team !== 'spec' && this.teamCount(team) >= this.settings.teamSize) return false;
     if (p.body) { this.world.removeBody(p.body); p.body = null; }
     p.team = team;
-    p.input = 0; p.prevKick = false; p.kickArmed = false; p.kicking = false;
+    p.input = 0; p.prevKick = false; p.kickArmed = false; p.kickBuffer = 0; p.kicking = false;
     if (team !== 'spec') {
       this._createBody(p);
       this._placeAtSpawn(p, this.teamPlayers(team).indexOf(p));
@@ -290,7 +316,7 @@ export class MatchController {
       this.teamPlayers(team).forEach((p, i) => this._placeAtSpawn(p, i));
     }
     for (const p of this.players.values()) {
-      p.kickCooldown = 0; p.kickArmed = false;
+      p.kickCooldown = 0; p.kickArmed = false; p.kickBuffer = 0;
     }
   }
 
@@ -389,16 +415,8 @@ export class MatchController {
       const b = p.body;
       if (!b) continue;
       const bits = p.input;
-      const kickHeld = (bits & IN_KICK) !== 0;
-      if (kickHeld && !p.prevKick) p.kickArmed = true;
-      if (!kickHeld) p.kickArmed = false;
-      p.kicking = kickHeld;
       applyMovementInput(b, bits, cfg);
-      if (p.kickCooldown > 0) p.kickCooldown--;
-      if (kickHeld && p.kickCooldown === 0 && (this.settings.kickMode === 'repeat' || p.kickArmed)) {
-        this._tryKick(p);
-      }
-      p.prevKick = kickHeld;
+      updateKickInput(p, bits, this.settings, () => this._tryKick(p), cfg);
     }
 
     // 2) Física.
@@ -426,8 +444,6 @@ export class MatchController {
     const ball = this.ball;
     const preVx = ball.vx, preVy = ball.vy;
     if (!applyKickImpulse(b, ball, this.cfg)) return false;
-    p.kickCooldown = this.settings.kickCooldown;
-    p.kickArmed = false;
     p.stats.kicks++;
     this.events.push({ type: 'kick', id: p.id });
     this._registerTouch(p, preVx, preVy);
@@ -539,7 +555,7 @@ export class MatchController {
     for (const p of this.players.values()) {
       if (!p.body) continue;
       const pb = p.body;
-      players.push([p.id, r2(pb.x), r2(pb.y), r2(pb.vx), r2(pb.vy), p.kicking ? 1 : 0, p.kickCooldown, p.kickArmed ? 1 : 0, p.prevKick ? 1 : 0, p.input]);
+      players.push([p.id, r2(pb.x), r2(pb.y), r2(pb.vx), r2(pb.vy), p.kicking ? 1 : 0, p.kickCooldown, p.kickArmed ? 1 : 0, p.prevKick ? 1 : 0, p.input, p.kickBuffer]);
     }
     return {
       tick: this.tickCount,

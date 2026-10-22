@@ -57,8 +57,9 @@ test('reconciliation replays pending kicks and does not apply an acknowledged ki
   match.tick();
   game._onSnapshot({ d: match.snapshot(), a: 1 });
   assert.ok(Math.abs(game.predBall.x - x) < 0.01);
+  const speed = game.predBall.vx;
   game.tick();
-  assert.ok(game.predBall.vx < 5.2, 'holding press mode does not kick again');
+  assert.ok(game.predBall.vx < speed, 'holding press mode does not kick again');
 });
 
 test('paused snapshots stop ball prediction', () => {
@@ -110,4 +111,46 @@ test('ball smoothing is cleared on a goal or restart', () => {
   const d = match.snapshot();
   game._onSnapshot({ d: { ...d, ph: 'goal', tick: d.tick + 1 }, a: 0 });
   assert.equal(game.ballSmoothX, 0);
+});
+
+test('pause and resume snapshots are applied even when the simulation tick did not advance', () => {
+  const { game, match } = setup();
+  const d = match.snapshot();
+  game._onSnapshot({ d: { ...d, pa: 1 }, a: 0 });
+  assert.equal(game.latest.pa, 1);
+  assert.equal(game.canControl(), false);
+  game._onSnapshot({ d: { ...d, pa: 0 }, a: 0 });
+  assert.equal(game.latest.pa, 0);
+  assert.equal(game.canControl(), true);
+  assert.equal(game.snaps.length, 1, 'same-tick updates replace the buffered state');
+});
+
+test('kick audio is immediate, is not replayed during reconciliation and is not doubled by confirmation', () => {
+  const { game, app, match } = setup();
+  const sounds = [];
+  app.audio.playEvents = events => sounds.push(...events);
+  game.tick();
+  assert.equal(sounds.filter(e => e.type === 'kick').length, 1, 'local kick has immediate feedback');
+  game._reconcile(match.snapshot());
+  assert.equal(sounds.filter(e => e.type === 'kick').length, 1, 'replaying input is silent');
+  match.setInput(1, IN_KICK);
+  match.tick();
+  game._onSnapshot({ d: match.snapshot(), a: 1, e: [['k', 1]] });
+  assert.equal(sounds.filter(e => e.type === 'kick').length, 1, 'confirmation is silent');
+});
+
+test('a buffered shot stays consistent between client prediction and server simulation', () => {
+  const { game, app, match } = setup();
+  match.players.get(1).kickCooldown = 4;
+  game._reconcile(match.snapshot());
+  for (let i = 0; i < 4; i++) {
+    const bits = i === 0 ? IN_KICK : 0;
+    app.input.sample = () => bits;
+    game.tick();
+    match.setInput(1, bits);
+    match.tick();
+  }
+  assert.equal(match.players.get(1).stats.kicks, 1);
+  assert.ok(Math.abs(game.predBall.x - match.ball.x) < 0.001);
+  assert.ok(Math.abs(game.predBall.vx - match.ball.vx) < 0.001);
 });

@@ -60,8 +60,9 @@ Exemplo: `PORT=3000 TRUST_PROXY=1 npm start` (no Windows PowerShell: `$env:PORT=
 | Menu da sala (online) / Pausa (offline) | Esc |
 | Depuração (hitboxes, vetores, alcance do chute) | F3 |
 
-- O chute só sai se a bola estiver encostada (alcance de 4,5 unidades entre as superfícies) e vai na direção **centro do jogador → centro da bola**.
+- O chute só sai perto da bola (alcance de 5,5 unidades entre as superfícies) e vai na direção **centro do jogador → centro da bola**.
 - Política padrão "um chute por toque": segurar a tecla arma o chute, que dispara quando a bola entra no alcance; para chutar de novo, solte e aperte. O anfitrião pode trocar para "repetir enquanto segura" e ajustar o cooldown.
+- Toques rápidos ficam guardados por até 100 ms para não se perderem ao chegar à bola ou durante o cooldown. O intervalo padrão entre chutes é 100 ms; o som do chute online responde localmente, sem esperar o servidor.
 - Segurar o chute deixa o jogador um pouco mais lento (domínio de bola).
 - **2 jogadores no mesmo teclado:** J1 = W A S D + Espaço/X; J2 = Setas + Num0 / . / Enter.
 
@@ -180,7 +181,7 @@ O cliente importa o código compartilhado pelo *import map* `@shared/` (definido
 
 ## Física (`shared/config/physicsConfig.js`)
 
-Valores por tick (1/60 s): jogador raio 15, massa inversa 0,5, aceleração 0,11 (0,075 chutando), amortecimento 0,955, reforço de 1,45× ao inverter direção; bola raio 10, massa inversa 1, amortecimento 0,988; chute 5,2 com alcance 4,5; restituição = produto dos coeficientes. Subpassos automáticos limitam o deslocamento a 4 unidades por subpasso; limites de velocidade e um *failsafe* recolocam qualquer corpo inválido (NaN/fora do mundo).
+Valores por tick (1/60 s): jogador raio 15, massa inversa 0,5, aceleração 0,11 (0,075 chutando), amortecimento 0,955, reforço de 1,45× ao inverter direção; bola raio 10, massa inversa 1, amortecimento 0,988; chute 6,4 com alcance 5,5, cooldown padrão de 6 ticks e buffer de 6 ticks. Ao receber uma bola rápida, o chute garante velocidade de saída de pelo menos 75% da força base na direção do chute, preservando o movimento lateral. Restituição = produto dos coeficientes. Subpassos automáticos limitam o deslocamento a 4 unidades por subpasso; limites de velocidade e um *failsafe* recolocam qualquer corpo inválido (NaN/fora do mundo).
 
 ## Arenas
 
@@ -208,7 +209,7 @@ Formato próprio `discofut-arena` v1:
 npm test
 ```
 
-49 testes: colisões frontal/oblíqua, conservação de momento, rebote, tunelamento a velocidade máxima, traves, canto, estabilidade 10 s com 4 jogadores prensando a bola, determinismo, gol limítrofe (rente à trave por dentro/fora, bola parada sobre a linha), gol único, kickoff, chutes/cooldown, diagonais, fim por gols/tempo/gol de ouro, autoria/assistência/gol contra, bots (partidas completas, papéis, difícil > fácil), validação de arenas maliciosas e um servidor real com clientes WebSocket (salas, senha, permissões, chat, sincronização, gol decidido pelo servidor, bots, expulsão, reconexão, transferência de anfitrião, *path traversal*).
+68 testes: colisões frontal/oblíqua, conservação de momento, rebote, tunelamento a velocidade máxima, traves, canto, estabilidade 10 s com 4 jogadores prensando a bola, determinismo, gol limítrofe (rente à trave por dentro/fora, bola parada sobre a linha), gol único, kickoff, chutes/cooldown, diagonais, fim por gols/tempo/gol de ouro, autoria/assistência/gol contra, bots (partidas completas, papéis, difícil > fácil), validação de arenas maliciosas e um servidor real com clientes WebSocket (salas, senha, permissões, chat, sincronização, gol decidido pelo servidor, bots, expulsão, reconexão, transferência de anfitrião, *path traversal*).
 
 Teste ponta a ponta opcional com navegadores reais:
 
