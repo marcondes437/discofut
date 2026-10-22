@@ -1,0 +1,23 @@
+{
+  "name": "discofut",
+  "version": "1.0.0",
+  "description": "DiscoFut — futebol 2D multiplayer de navegador com física própria e servidor autoritativo (inspirado na sensação de jogos de futebol de discos).",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.17"
+  },
+  "scripts": {
+    "dev": "node --watch server/index.js",
+    "start": "node server/index.js",
+    "build": "node scripts/build.js",
+    "test": "node scripts/run-tests.js",
+    "test:physics": "node --test tests/physics.test.js tests/rules.test.js tests/bots.test.js",
+    "test:server": "node --test tests/server.test.js",
+    "check": "node scripts/build.js --check"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>DiscoFut — futebol de discos 2D</title>
+  <meta name="description" content="Futebol 2D multiplayer minimalista com física própria, bots, salas online e editor de arenas.">
+  <meta name="theme-color" content="#14181f">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='28' fill='%233f8f4a'/%3E%3Ccircle cx='32' cy='32' r='12' fill='%23fff' stroke='%23222' stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+  <script type="importmap">
+    { "imports": { "@shared/": "./shared/" } }
+  </script>
+</head>
+<body>
+  <div id="app">
+    <canvas id="game" aria-label="Campo de jogo"></canvas>
+
+    <div id="hud" hidden>
+      <div class="hud-score" role="status" aria-live="polite">
+        <span class="team-tag red" id="hud-red-name">Vermelho</span>
+        <span class="score red" id="hud-red">0</span>
+        <span class="clock" id="hud-clock">00:00</span>
+        <span class="score blue" id="hud-blue">0</span>
+        <span class="team-tag blue" id="hud-blue-name">Azul</span>
+      </div>
+      <div class="hud-status" id="hud-status"></div>
+      <div class="hud-net" id="hud-net"></div>
+    </div>
+
+    <div id="center-banner" aria-live="assertive"></div>
+    <div id="replay-badge" hidden>REPLAY · qualquer tecla para sair</div>
+
+    <div id="chat" hidden>
+      <div id="chat-log" aria-live="polite"></div>
+      <form id="chat-form" autocomplete="off">
+        <input id="chat-input" maxlength="140" placeholder="Enter para conversar · Esc para fechar" aria-label="Mensagem do chat">
+      </form>
+    </div>
+
+    <div id="screens"></div>
+    <div id="toasts" aria-live="polite"></div>
+  </div>
+
+  <noscript>Este jogo precisa de JavaScript habilitado.</noscript>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
