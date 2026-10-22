@@ -539,7 +539,7 @@ export class MatchController {
     for (const p of this.players.values()) {
       if (!p.body) continue;
       const pb = p.body;
-      players.push([p.id, r2(pb.x), r2(pb.y), r2(pb.vx), r2(pb.vy), p.kicking ? 1 : 0, p.kickCooldown, p.kickArmed ? 1 : 0, p.prevKick ? 1 : 0]);
+      players.push([p.id, r2(pb.x), r2(pb.y), r2(pb.vx), r2(pb.vy), p.kicking ? 1 : 0, p.kickCooldown, p.kickArmed ? 1 : 0, p.prevKick ? 1 : 0, p.input]);
     }
     return {
       tick: this.tickCount,

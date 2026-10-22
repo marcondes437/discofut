@@ -68,3 +68,46 @@ test('paused snapshots stop ball prediction', () => {
   assert.equal(game.predBall.x, 0);
   assert.equal(game.predBall.vx, 0);
 });
+
+test('inputs are replayed even before the server acknowledges the first one', () => {
+  const { game, match } = setup();
+  game.ack = -1;
+  game.tick();
+  const x = game.predBall.x;
+  game._reconcile(match.snapshot());
+  assert.equal(game.predBall.x, x);
+});
+
+test('remote players and ball contacts are rendered on the same predicted tick', () => {
+  const { game, match, app } = setup();
+  app.input.sample = () => 0;
+  const remote = match.players.get(2);
+  remote.body.x = 25; remote.body.y = 0;
+  remote.body.vx = -2; remote.body.vy = 0;
+  remote.input = 4;
+  game._reconcile(match.snapshot());
+  game.tick();
+  const body = game.predWorld.bodies.find(b => b.id === 2);
+  const view = game._view(performance.now());
+  assert.equal(view.players.find(p => p.id === 2).x, body.x);
+  assert.ok(game.predBall.vx < 0, 'remote contact also affects the ball immediately');
+});
+
+test('ordinary ball corrections keep the displayed position continuous', () => {
+  const { game, match } = setup();
+  game.tick();
+  const before = game._view(performance.now()).ball.x;
+  const d = match.snapshot();
+  d.b[0] = 2;
+  game._onSnapshot({ d: { ...d, tick: d.tick + 1 }, a: 0 });
+  assert.equal(game._view(performance.now()).ball.x, before);
+  assert.notEqual(game.predBall.x, before, 'server correction still updates simulation');
+});
+
+test('ball smoothing is cleared on a goal or restart', () => {
+  const { game, match } = setup();
+  game.ballSmoothX = 20;
+  const d = match.snapshot();
+  game._onSnapshot({ d: { ...d, ph: 'goal', tick: d.tick + 1 }, a: 0 });
+  assert.equal(game.ballSmoothX, 0);
+});

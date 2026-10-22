@@ -4,7 +4,7 @@ import { BotManager, BOT_DIFFICULTY } from '../../shared/ai/BotController.js';
 import { getBuiltinArena, BUILTIN_ARENAS } from '../../shared/maps/arenas.js';
 import { validateArena } from '../../shared/maps/arenaValidate.js';
 import { LIMITS, SNAPSHOT_RATES, ADMIN_ACTIONS, cleanText } from '../../shared/protocol/messages.js';
-import { IN_MASK } from '../../shared/config/physicsConfig.js';
+import { IN_MASK, IN_KICK } from '../../shared/config/physicsConfig.js';
 
 const MAX_BOTS = 8;
 const CRITICAL_EVENTS = new Set(['goal', 'end', 'overtime', 'count', 'whistle', 'phase', 'pause', 'ballReset']);
@@ -381,12 +381,17 @@ export class Room {
         m.setInput(mem.id, 0);
         continue;
       }
+      let kickTap = false;
       if (mem.queue.length) {
-        const inp = mem.queue.shift();
+        // Network bursts must not leave movement waiting several simulation ticks.
+        // Keep a short kick tap even when its release arrived in the same burst.
+        const inp = mem.queue[mem.queue.length - 1];
+        kickTap = mem.queue.some((input) => (input.k & IN_KICK) !== 0);
         mem.lastInput = inp.k;
         mem.ackSeq = inp.s;
+        mem.queue.length = 0;
       } else if (now - mem.lastInputAt > 500) mem.lastInput = 0; // cliente travado: solta as teclas
-      m.setInput(mem.id, mem.lastInput);
+      m.setInput(mem.id, mem.lastInput | (kickTap ? IN_KICK : 0));
     }
     this.bots.apply(m);
     const events = m.tick();

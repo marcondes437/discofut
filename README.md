@@ -94,9 +94,9 @@ Depois de abrir o jogo uma vez por `http(s)`, um *service worker* guarda os arqu
 
 ### Como funciona a rede
 
-- O cliente envia **apenas** `{t:'in', s:seq, k:bits}` a cada tick (60 Hz). O servidor descarta sequências antigas, limita a fila (máx. 6) e consome uma entrada por tick; se o cliente travar, solta as teclas após 500 ms.
+- O cliente envia **apenas** `{t:'in', s:seq, k:bits}` a cada tick (60 Hz). O servidor descarta sequências antigas e usa a direção mais recente no próximo tick, preservando toques rápidos de chute; se o cliente travar, solta as teclas após 500 ms.
 - O servidor simula a 60 Hz com o mesmo código de `shared/` e publica snapshots (20/30/60 Hz, configurável) com o número da última entrada processada (`a`).
-- Jogadores remotos e bola: **interpolação** com atraso adaptativo ao jitter (extrapolação curta se faltar dado).
+- Jogadores e bola compartilham a mesma linha do tempo prevista durante a partida. Sem predição ou como espectador, usa **interpolação** curta adaptativa ao jitter.
 - Próprio jogador: **predição** com as mesmas funções de movimento e **reconciliação** (reaplica entradas não confirmadas; correções pequenas são suavizadas). Desligável em Configurações.
 - Gol, relógio, saída de bola, pausa, times, chat e administração vêm do servidor (eventos confiáveis + estado da sala versionado `rv`).
 - Segurança: limite de tamanho de mensagem (70 KB), *token bucket* por conexão, até 12 conexões por IP, validação de todos os campos, permissões checadas no servidor, senhas comparadas por hash com `timingSafeEqual`, arquivos estáticos protegidos contra *path traversal*.
@@ -224,4 +224,4 @@ python tests/e2e/browser_e2e.py http://localhost:8080/
 - Estatísticas de assistências, defesas e recuperações são estimativas a partir dos toques.
 - Sem contas/persistência: banimentos duram 10 min e valem por sessão/IP.
 - Feito para teclado; em celular a interface abre, mas não há controles de toque.
-- Predição local cobre o movimento do próprio jogador; a bola é sempre a do servidor (com atraso de interpolação).
+- A predição de contatos e chutes usa os últimos comandos conhecidos dos adversários. Mudanças ainda não recebidas podem causar correções com ping alto; o servidor continua decidindo os gols.
